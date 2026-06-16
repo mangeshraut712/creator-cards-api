@@ -10,7 +10,6 @@ const { appLogger } = require('@app-core/logger');
 const { ensureDatabaseInMongoUri } = require('./utils/mongo-uri');
 
 const canLogEndpointInformation = process.env.CAN_LOG_ENDPOINT_INFORMATION;
-const isProduction = process.env.NODE_ENV === 'production';
 const mongoUri = ensureDatabaseInMongoUri(process.env.MONGODB_URI);
 
 const ENDPOINT_CONFIGS = [
@@ -75,14 +74,7 @@ function setupEndpointHandlers(server, basePath, options = {}) {
 
 async function connectMongo() {
   if (!mongoUri) {
-    const message = 'MONGODB_URI is not set';
-    appLogger.error({ isProduction }, 'mongodb-uri-missing');
-
-    if (isProduction) {
-      throw new Error(message);
-    }
-
-    return;
+    throw new Error('MONGODB_URI is not set');
   }
 
   const result = await createConnection({ uri: mongoUri });
@@ -96,10 +88,6 @@ async function connectMongo() {
 
 async function startApp() {
   try {
-    if (isProduction && !mongoUri) {
-      throw new Error('MONGODB_URI is required in production');
-    }
-
     await connectMongo();
 
     Promise.resolve(createQueue()).catch((err) => {
@@ -124,10 +112,7 @@ async function startApp() {
     appLogger.info({ port: process.env.PORT || 8811 }, 'server-started');
   } catch (error) {
     appLogger.errorX(error, 'app-startup-failed');
-
-    if (isProduction) {
-      process.exit(1);
-    }
+    process.exit(1);
   }
 }
 
