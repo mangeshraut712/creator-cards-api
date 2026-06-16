@@ -1,8 +1,8 @@
 const validator = require('@app-core/validator');
 const { throwAppError } = require('@app-core/errors');
-const { CreatorCardMessages } = require('@app/messages');
-const { CreatorCard } = require('@app/models');
 const { ulid } = require('@app-core/randomness');
+const { CreatorCardMessages } = require('@app/messages');
+const creatorCardRepository = require('@app/repository/creator-card');
 const generateRandomAlphanumeric = require('./helpers/generate-random-alphanumeric');
 
 const createSpec = `root {
@@ -35,14 +35,6 @@ function generateSlugFromTitle(title) {
     .replace(/\s+/g, '-')
     .replace(/[^a-z0-9_-]/g, '');
   return slug;
-}
-
-function serializeCard(card) {
-  const { _id, __v, ...rest } = card;
-  return {
-    id: _id,
-    ...rest,
-  };
 }
 
 async function createCreatorCard(serviceData) {
@@ -97,7 +89,7 @@ async function createCreatorCard(serviceData) {
     // If the result is shorter than 5 characters OR already taken by another card,
     // append a hyphen followed by a random 6-character alphanumeric suffix
     let needsSuffix = slug.length < 5;
-    const existingCard = await CreatorCard.findOne({ slug, deleted: null }).exec();
+    const existingCard = await creatorCardRepository.findOne({ query: { slug } });
     if (existingCard) {
       needsSuffix = true;
     }
@@ -115,7 +107,7 @@ async function createCreatorCard(serviceData) {
       );
     }
     // Slug was provided by client - check uniqueness
-    const existingCard = await CreatorCard.findOne({ slug, deleted: null }).exec();
+    const existingCard = await creatorCardRepository.findOne({ query: { slug } });
     if (existingCard) {
       throwAppError(CreatorCardMessages.SLUG_TAKEN, 'SL02');
     }
@@ -134,7 +126,7 @@ async function createCreatorCard(serviceData) {
     access_code: accessType === 'private' ? validatedData.access_code : null,
     created: now,
     updated: now,
-    deleted: null,
+    deleted: 0, // For paranoid model, active records have deleted: 0
   };
 
   if (validatedData.description) {
@@ -149,10 +141,15 @@ async function createCreatorCard(serviceData) {
     cardData.service_rates = validatedData.service_rates;
   }
 
-  const card = await CreatorCard.create(cardData);
+  const card = await creatorCardRepository.create(cardData);
 
-  // Serialize: Map _id to id, omit __v
-  return serializeCard(card.toObject());
+  // Serialize: Map _id to id, convert deleted: 0 to null for response
+  const { _id, deleted, ...rest } = card;
+  return {
+    id: _id.toString(),
+    ...rest,
+    deleted: deleted === 0 ? null : deleted,
+  };
 }
 
-module.exports = createCreatorCard;
+module.exports = { createCreatorCard };
