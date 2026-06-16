@@ -248,6 +248,7 @@ function Server(serverConfig = {}) {
           : 'Some error occured.';
         responseComponents.body.errors = error.details || undefined;
         responseComponents.body.data = error.context;
+        responseComponents.body.code = error.isApplicationError ? error.errorCode : undefined;
 
         expressResponse.status(responseComponents.statusCode).json(responseComponents.body); // Todo: Add a callback config that can be used to handle this in a custom way.
       } finally {
