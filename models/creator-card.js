@@ -20,4 +20,4 @@ const schemaConfig = {
 
 const modelSchema = new ModelSchema(schemaConfig, { collection: modelName });
 
-module.exports = DatabaseModel.model(modelName, modelSchema);
+module.exports = DatabaseModel.model(modelName, modelSchema, { paranoid: true });
