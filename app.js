@@ -6,42 +6,12 @@ const fs = require('fs');
 const { createServer } = require('@app-core/server');
 const { createConnection } = require('@app-core/mongoose');
 const { createQueue } = require('@app-core/queue');
+const { appLogger } = require('@app-core/logger');
+const { ensureDatabaseInMongoUri } = require('./utils/mongo-uri');
 
 const canLogEndpointInformation = process.env.CAN_LOG_ENDPOINT_INFORMATION;
-
-if (process.env.NODE_ENV === 'production' && !process.env.MONGODB_URI) {
-  console.error('MONGODB_URI is required in production');
-  process.exit(1);
-}
-
-createConnection({
-  uri: process.env.MONGODB_URI,
-})
-  .then((result) => {
-    if (result.connection) {
-      console.log('MongoDB connected successfully');
-      return;
-    }
-
-    if (!process.env.MONGODB_URI) {
-      console.error('MONGODB_URI is not set. Database operations will fail.');
-    }
-  })
-  .catch((err) => {
-    console.error('Failed to connect to MongoDB:', err.message);
-  });
-
-Promise.resolve(createQueue()).catch((err) => {
-  console.error('Failed to create queue:', err.message);
-});
-
-const server = createServer({
-  port: process.env.PORT,
-  JSONLimit: '150mb',
-  enableCors: true,
-});
-
-console.log('Server created successfully');
+const isProduction = process.env.NODE_ENV === 'production';
+const mongoUri = ensureDatabaseInMongoUri(process.env.MONGODB_URI);
 
 const ENDPOINT_CONFIGS = [
   {
@@ -89,11 +59,7 @@ function logEndpointMetaData(endpointConfigs) {
   });
 }
 
-if (canLogEndpointInformation) {
-  logEndpointMetaData(ENDPOINT_CONFIGS);
-}
-
-function setupEndpointHandlers(basePath, options = {}) {
+function setupEndpointHandlers(server, basePath, options = {}) {
   const dirs = fs.readdirSync(basePath);
 
   dirs.forEach((file) => {
@@ -107,8 +73,62 @@ function setupEndpointHandlers(basePath, options = {}) {
   });
 }
 
-ENDPOINT_CONFIGS.forEach((config) => {
-  setupEndpointHandlers(config.path, config.options);
-});
+async function connectMongo() {
+  if (!mongoUri) {
+    const message = 'MONGODB_URI is not set';
+    appLogger.error({ isProduction }, 'mongodb-uri-missing');
 
-server.startServer();
+    if (isProduction) {
+      throw new Error(message);
+    }
+
+    return;
+  }
+
+  const result = await createConnection({ uri: mongoUri });
+
+  if (!result.connection) {
+    throw new Error('MongoDB connection was not established');
+  }
+
+  appLogger.info({}, 'mongodb-connected');
+}
+
+async function startApp() {
+  try {
+    if (isProduction && !mongoUri) {
+      throw new Error('MONGODB_URI is required in production');
+    }
+
+    await connectMongo();
+
+    Promise.resolve(createQueue()).catch((err) => {
+      appLogger.error({ error: err.message }, 'queue-init-failed');
+    });
+
+    const server = createServer({
+      port: process.env.PORT,
+      JSONLimit: '150mb',
+      enableCors: true,
+    });
+
+    if (canLogEndpointInformation) {
+      logEndpointMetaData(ENDPOINT_CONFIGS);
+    }
+
+    ENDPOINT_CONFIGS.forEach((config) => {
+      setupEndpointHandlers(server, config.path, config.options);
+    });
+
+    server.startServer();
+    appLogger.info({ port: process.env.PORT || 8811 }, 'server-started');
+  } catch (error) {
+    appLogger.errorX(error, 'app-startup-failed');
+
+    if (isProduction) {
+      process.exit(1);
+    }
+  }
+}
+
+startApp();

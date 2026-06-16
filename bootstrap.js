@@ -45,12 +45,12 @@ async function loadSecretsToEnv({
 }
 
 (async () => {
-  if (process.env.USE_SECRETS_MANAGER) {
+  if (process.env.USE_SECRETS_MANAGER && process.env.SECRETS_MANAGER_ID) {
     await loadSecretsToEnv({
       prefix: '',
       optional: process.env.NODE_ENV !== 'production',
       region: process.env.AWS_REGION || 'eu-central-1',
-      secretId: process.env.SECRETS_MANAGER_ID || 'myapp/staging',
+      secretId: process.env.SECRETS_MANAGER_ID,
     });
 
     process.env.__ALREADY_BOOTSTRAPPED_ENVS = true;

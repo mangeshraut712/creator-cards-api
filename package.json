@@ -10,6 +10,7 @@
   },
   "scripts": {
     "start": "node bootstrap.js",
+    "lint:app": "eslint app.js bootstrap.js services/creator-card endpoints/creator-cards models/creator-card.js messages/creator-card.js repository/creator-card utils/mongo-uri.js",
     "test": "set USE_MOCK_MODEL=1 && mocha --recursive --require dotenv/config",
     "prepare": "node -e \"if (process.env.HUSKY !== '0' && !process.env.CI) require('child_process').execSync('husky', { stdio: 'inherit' })\"",
     "commitlint": "commitlint --edit",

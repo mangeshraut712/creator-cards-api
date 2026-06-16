@@ -36,8 +36,6 @@ const createSpec = `root {
 const parsedCreateSpec = validator.parse(createSpec);
 
 async function createCreatorCard(serviceData) {
-  let response;
-
   const validatedData = validator.validate(serviceData, parsedCreateSpec);
 
   const accessType = validatedData.access_type || 'public';
