@@ -9,6 +9,11 @@ const { createQueue } = require('@app-core/queue');
 
 const canLogEndpointInformation = process.env.CAN_LOG_ENDPOINT_INFORMATION;
 
+if (process.env.NODE_ENV === 'production' && !process.env.MONGODB_URI) {
+  console.error('MONGODB_URI is required in production');
+  process.exit(1);
+}
+
 createConnection({
   uri: process.env.MONGODB_URI,
 })
@@ -24,9 +29,6 @@ createConnection({
   })
   .catch((err) => {
     console.error('Failed to connect to MongoDB:', err.message);
-    if (process.env.NODE_ENV === 'production') {
-      process.exit(1);
-    }
   });
 
 Promise.resolve(createQueue()).catch((err) => {
