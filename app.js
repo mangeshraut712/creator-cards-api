@@ -9,19 +9,15 @@ const { createQueue } = require('@app-core/queue');
 
 const canLogEndpointInformation = process.env.CAN_LOG_ENDPOINT_INFORMATION;
 
-try {
-  createConnection({
-    uri: process.env.MONGODB_URI,
-  });
-} catch (err) {
+createConnection({
+  uri: process.env.MONGODB_URI,
+}).catch((err) => {
   console.error('Failed to connect to MongoDB:', err.message);
-}
+});
 
-try {
-  createQueue();
-} catch (err) {
+createQueue().catch((err) => {
   console.error('Failed to create queue:', err.message);
-}
+});
 
 const server = createServer({
   port: process.env.PORT,
