@@ -11,9 +11,23 @@ const canLogEndpointInformation = process.env.CAN_LOG_ENDPOINT_INFORMATION;
 
 createConnection({
   uri: process.env.MONGODB_URI,
-}).catch((err) => {
-  console.error('Failed to connect to MongoDB:', err.message);
-});
+})
+  .then((result) => {
+    if (result.connection) {
+      console.log('MongoDB connected successfully');
+      return;
+    }
+
+    if (!process.env.MONGODB_URI) {
+      console.error('MONGODB_URI is not set. Database operations will fail.');
+    }
+  })
+  .catch((err) => {
+    console.error('Failed to connect to MongoDB:', err.message);
+    if (process.env.NODE_ENV === 'production') {
+      process.exit(1);
+    }
+  });
 
 Promise.resolve(createQueue()).catch((err) => {
   console.error('Failed to create queue:', err.message);
