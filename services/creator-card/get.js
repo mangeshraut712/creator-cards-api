@@ -1,19 +1,10 @@
 const { throwAppError } = require('@app-core/errors');
 const { CreatorCardMessages } = require('@app/messages');
-const { CreatorCard } = require('@app/models');
-
-function serializeCardForRetrieval(card) {
-  // eslint-disable-next-line camelcase
-  const { _id, __v, access_code: _accessCode, ...rest } = card;
-  return {
-    id: _id,
-    ...rest,
-  };
-}
+const creatorCardRepository = require('@app/repository/creator-card');
 
 async function getCreatorCard(slug, queryParams = {}) {
   // Find the card by slug that is not deleted
-  const card = await CreatorCard.findOne({ slug, deleted: null }).lean().exec();
+  const card = await creatorCardRepository.findOne({ query: { slug } });
 
   // Rule 1: If no card with that slug exists → HTTP 404, NF01
   if (!card) {
@@ -35,8 +26,13 @@ async function getCreatorCard(slug, queryParams = {}) {
     throwAppError(CreatorCardMessages.INVALID_ACCESS_CODE, 'AC04');
   }
 
-  // Serialize: Map _id to id, omit _id, NEVER return access_code
-  return serializeCardForRetrieval(card);
+  // Serialize: Map _id to id, NEVER return access_code
+  // eslint-disable-next-line camelcase
+  const { _id, access_code, ...rest } = card;
+  return {
+    id: _id.toString(),
+    ...rest,
+  };
 }
 
-module.exports = getCreatorCard;
+module.exports = { getCreatorCard };
