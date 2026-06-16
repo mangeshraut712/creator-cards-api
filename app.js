@@ -15,7 +15,7 @@ createConnection({
   console.error('Failed to connect to MongoDB:', err.message);
 });
 
-createQueue().catch((err) => {
+Promise.resolve(createQueue()).catch((err) => {
   console.error('Failed to create queue:', err.message);
 });
 
@@ -24,6 +24,8 @@ const server = createServer({
   JSONLimit: '150mb',
   enableCors: true,
 });
+
+console.log('Server created successfully');
 
 const ENDPOINT_CONFIGS = [
   {

@@ -8,7 +8,7 @@ const schemaConfig = {
   description: { type: SchemaTypes.String },
   slug: { type: SchemaTypes.String, required: true, unique: true },
   creator_reference: { type: SchemaTypes.String, required: true },
-  links: { type: SchemaTypes.Array, default: [] },
+  links: { type: SchemaTypes.Array },
   service_rates: { type: SchemaTypes.Mixed },
   status: { type: SchemaTypes.String, required: true },
   access_type: { type: SchemaTypes.String, default: 'public', required: true },

@@ -11,10 +11,12 @@ module.exports = createHandler({
     appLogger.info({ requestContext: rc, response: rs }, 'get-creator-card-request-completed');
   },
   async handler(rc, helpers) {
-    const { slug } = rc.params;
-    const queryParams = rc.query;
+    const payload = {
+      slug: rc.params.slug,
+      ...rc.query,
+    };
 
-    const response = await creatorCardService.getCreatorCard(slug, queryParams);
+    const response = await creatorCardService.getCreatorCard(payload);
     return {
       status: helpers.http_statuses.HTTP_200_OK,
       message: CreatorCardMessages.CREATOR_CARD_RETRIEVED,

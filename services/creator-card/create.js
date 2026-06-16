@@ -3,22 +3,28 @@ const { throwAppError } = require('@app-core/errors');
 const { ulid } = require('@app-core/randomness');
 const { CreatorCardMessages } = require('@app/messages');
 const creatorCardRepository = require('@app/repository/creator-card');
-const generateRandomAlphanumeric = require('./helpers/generate-random-alphanumeric');
+const serializeCard = require('./helpers/serialize-card');
+const {
+  generateSlugFromTitle,
+  isValidSlugFormat,
+  resolveUniqueSlug,
+} = require('./helpers/slug-utils');
+const { isAlphanumeric, isValidLinkUrl } = require('./helpers/validation-utils');
 
 const createSpec = `root {
-  title string<minlength:3|maxlength:100>
-  description? string<maxlength:500>
-  slug? string<minlength:5|maxlength:50>
+  title string<minLength:3|maxLength:100>
+  description? string<maxLength:500>
+  slug? string<minLength:5|maxLength:50>
   creator_reference string<length:20>
   links[]? {
-    title string<minlength:1|maxlength:100>
-    url string<maxlength:200>
+    title string<minLength:1|maxLength:100>
+    url string<maxLength:200>
   }
   service_rates? {
     currency string(NGN|USD|GBP|GHS)
     rates[] {
-      name string<minlength:3|maxlength:100>
-      description string<maxlength:250>
+      name string<minLength:3|maxLength:100>
+      description string<maxLength:250>
       amount number<min:1>
     }
   }
@@ -29,38 +35,28 @@ const createSpec = `root {
 
 const parsedCreateSpec = validator.parse(createSpec);
 
-function generateSlugFromTitle(title) {
-  const slug = title
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9_-]/g, '');
-  return slug;
-}
-
 async function createCreatorCard(serviceData) {
-  // Validate incoming data with VSL
+  let response;
+
   const validatedData = validator.validate(serviceData, parsedCreateSpec);
 
-  // Business rule: access_code is required when access_type is private
   const accessType = validatedData.access_type || 'public';
+
   if (accessType === 'private' && !validatedData.access_code) {
     throwAppError(CreatorCardMessages.ACCESS_CODE_REQUIRED, 'AC01');
   }
 
-  // Business rule: access_code must not be set on public cards
   if (accessType !== 'private' && validatedData.access_code) {
     throwAppError(CreatorCardMessages.ACCESS_CODE_NOT_ALLOWED, 'AC05');
   }
 
-  // Validate access_code is alphanumeric when provided
-  if (validatedData.access_code && !/^[a-zA-Z0-9]+$/.test(validatedData.access_code)) {
+  if (validatedData.access_code && !isAlphanumeric(validatedData.access_code)) {
     throwAppError('access_code must be alphanumeric (letters and numbers only)', 'SPCL_VALIDATION');
   }
 
-  // Validate each link URL starts with http:// or https://
   if (validatedData.links && validatedData.links.length > 0) {
     validatedData.links.forEach((link) => {
-      if (!link.url.startsWith('http://') && !link.url.startsWith('https://')) {
+      if (!isValidLinkUrl(link.url)) {
         throwAppError(
           `Link URL must start with http:// or https://: ${link.url}`,
           'SPCL_VALIDATION'
@@ -69,7 +65,6 @@ async function createCreatorCard(serviceData) {
     });
   }
 
-  // Validate service_rates amounts are integers (no decimals)
   if (validatedData.service_rates && validatedData.service_rates.rates) {
     validatedData.service_rates.rates.forEach((rate) => {
       if (!Number.isInteger(rate.amount)) {
@@ -81,43 +76,31 @@ async function createCreatorCard(serviceData) {
     });
   }
 
-  // Handle slug: auto-generate if not provided
   let { slug } = validatedData;
+
   if (!slug) {
-    slug = generateSlugFromTitle(validatedData.title);
-
-    // If the result is shorter than 5 characters OR already taken by another card,
-    // append a hyphen followed by a random 6-character alphanumeric suffix
-    let needsSuffix = slug.length < 5;
-    const existingCard = await creatorCardRepository.findOne({ query: { slug } });
-    if (existingCard) {
-      needsSuffix = true;
-    }
-
-    if (needsSuffix) {
-      const suffix = generateRandomAlphanumeric(6);
-      slug = `${slug}-${suffix}`;
-    }
+    const baseSlug = generateSlugFromTitle(validatedData.title);
+    slug = await resolveUniqueSlug(baseSlug, async (candidateSlug) =>
+      creatorCardRepository.findOne({ query: { slug: candidateSlug } })
+    );
   } else {
-    // Validate slug format: letters, numbers, hyphens and underscores only
-    if (!/^[a-zA-Z0-9_-]+$/.test(slug)) {
+    if (!isValidSlugFormat(slug)) {
       throwAppError(
         'Slug can only contain letters, numbers, hyphens and underscores',
         'SPCL_VALIDATION'
       );
     }
-    // Slug was provided by client - check uniqueness
+
     const existingCard = await creatorCardRepository.findOne({ query: { slug } });
     if (existingCard) {
       throwAppError(CreatorCardMessages.SLUG_TAKEN, 'SL02');
     }
   }
 
-  const id = ulid();
   const now = Date.now();
 
   const cardData = {
-    _id: id,
+    _id: ulid(),
     title: validatedData.title,
     slug,
     creator_reference: validatedData.creator_reference,
@@ -126,7 +109,7 @@ async function createCreatorCard(serviceData) {
     access_code: accessType === 'private' ? validatedData.access_code : null,
     created: now,
     updated: now,
-    deleted: 0, // For paranoid model, active records have deleted: 0
+    deleted: 0,
   };
 
   if (validatedData.description) {
@@ -142,14 +125,9 @@ async function createCreatorCard(serviceData) {
   }
 
   const card = await creatorCardRepository.create(cardData);
+  const serializedResponse = serializeCard(card);
 
-  // Serialize: Map _id to id, convert deleted: 0 to null for response
-  const { _id, deleted, ...rest } = card;
-  return {
-    id: _id.toString(),
-    ...rest,
-    deleted: deleted === 0 ? null : deleted,
-  };
+  return serializedResponse;
 }
 
-module.exports = { createCreatorCard };
+module.exports = createCreatorCard;

@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: creator-cards-api
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node bootstrap.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HUSKY
+        value: '0'
+      - key: MONGODB_URI
+        sync: false

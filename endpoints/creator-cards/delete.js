@@ -11,11 +11,12 @@ module.exports = createHandler({
     appLogger.info({ requestContext: rc, response: rs }, 'delete-creator-card-request-completed');
   },
   async handler(rc, helpers) {
-    const { slug } = rc.params;
-    // eslint-disable-next-line camelcase
-    const { creator_reference } = rc.body;
+    const payload = {
+      slug: rc.params.slug,
+      ...rc.body,
+    };
 
-    const response = await creatorCardService.deleteCreatorCard(slug, creator_reference);
+    const response = await creatorCardService.deleteCreatorCard(payload);
     return {
       status: helpers.http_statuses.HTTP_200_OK,
       message: CreatorCardMessages.CREATOR_CARD_DELETED,
